@@ -1,0 +1,30 @@
+[crawler]
+max_depth = 3
+max_pages = 10000
+concurrent_requests = 10
+seed_urls = [
+    "https://example.com",
+    "https://news.ycombinator.com"
+]
+user_agent = "SearchEngineBot/1.0"
+
+[network]
+request_timeout_secs = 30
+request_delay_ms = 1000
+max_retries = 3
+respect_robots_txt = true
+
+[storage]
+database_url = "postgresql://localhost/crawler"
+redis_url = "redis://localhost:6379"
+enable_caching = true
+storage_path = "./data"
+
+[algorithms]
+primary_algorithm = "bfs"
+enable_opic = true
+priority_boost_domains = [
+    "wikipedia.org",
+    ".edu",
+    ".gov"
+]

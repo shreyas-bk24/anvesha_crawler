@@ -1,3 +1,70 @@
-fn main() {
-    println!("Hello, world!");
+use clap::Parser;
+use crawler::{init, CrawlerConfig, WebCrawler};
+use tracing::info;
+
+#[derive(Parser)]
+#[command(name = "search-crawler")]
+#[command(about = "A modular web crawler for search engines")]
+struct Args {
+    #[arg(short, long, default_value = "config/default.toml")]
+    config: String,
+
+    #[arg(long)]
+    dry_run: bool,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Parser)]
+enum Commands {
+    Crawl {
+        #[arg(short, long)]
+        seed_urls: Vec<String>,
+    },
+    Api {
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+    },
+    Stats,
+}
+
+#[tokio::main]
+async fn main() -> search_engine_crawler::Result<()> {
+    let args = Args::parse();
+
+    // Initialize logging and metrics
+    init().await?;
+
+    // Load configuration
+    let config = CrawlerConfig::from_file(&args.config)?;
+    info!("Loaded configuration from: {}", args.config);
+
+    match args.command {
+        Some(Commands::Crawl { seed_urls }) => {
+            let mut crawler_config = config;
+            if !seed_urls.is_empty() {
+                crawler_config.seed_urls = seed_urls;
+            }
+
+            let crawler = WebCrawler::new(crawler_config).await?;
+            crawler.start_crawling().await?;
+        }
+        Some(Commands::Api { port }) => {
+            let api_server = search_engine_crawler::api::create_server(config, port).await?;
+            api_server.serve().await?;
+        }
+        Some(Commands::Stats) => {
+            // Show crawler statistics
+            println!("Crawler Statistics:");
+            // Implementation here
+        }
+        None => {
+            // Default: start crawling
+            let crawler = WebCrawler::new(config).await?;
+            crawler.start_crawling().await?;
+        }
+    }
+
+    Ok(())
 }
