@@ -3,14 +3,14 @@
 //! A modular, high-performance web crawler designed for search engines.
 
 pub mod config;
-pub mod core;
-pub mod algorithms;
-pub mod network;
-pub mod parsing;
-pub mod storage;
-pub mod utils;
-pub mod models;
-pub mod api;
+// pub mod core;
+// pub mod algorithms;
+// pub mod network;
+// pub mod parsing;
+// pub mod storage;
+// pub mod utils;
+// pub mod models;
+// pub mod api;
 
 // Re-export commonly used types
 pub use config::CrawlerConfig;
