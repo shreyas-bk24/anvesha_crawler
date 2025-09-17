@@ -30,7 +30,7 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> search_engine_crawler::Result<()> {
+async fn main() -> crawler::Result<()> { // Fixed: search_engine_crawler -> crawler
     let args = Args::parse();
 
     // Initialize logging and metrics
@@ -44,15 +44,17 @@ async fn main() -> search_engine_crawler::Result<()> {
         Some(Commands::Crawl { seed_urls }) => {
             let mut crawler_config = config;
             if !seed_urls.is_empty() {
-                crawler_config.seed_urls = seed_urls;
+                crawler_config.crawler.seed_urls = seed_urls; // Fixed: Added .crawler field
             }
 
             let crawler = WebCrawler::new(crawler_config).await?;
             crawler.start_crawling().await?;
         }
         Some(Commands::Api { port }) => {
-            let api_server = search_engine_crawler::api::create_server(config, port).await?;
-            api_server.serve().await?;
+            // Remove this for now since API module doesn't exist yet
+            println!("API server not implemented yet. Port: {}", port);
+            // let api_server = crawler::api::create_server(config, port).await?;
+            // api_server.serve().await?;
         }
         Some(Commands::Stats) => {
             // Show crawler statistics
