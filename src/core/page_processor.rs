@@ -1,20 +1,19 @@
-/// process downloaded pages extracts content and links
+/// Process downloaded pages, extracts content and links
 use crate::models::{CrawlUrl, PageData};
 use scraper::{Html, Selector};
 use std::collections::HashSet;
-use tracing::{debug, error, info};
+use tracing::{debug, error, warn};
 use url::Url;
 
-// process the HTML pages and extract the useful info
-
+/// Processes HTML pages and extracts useful information
 pub struct PageProcessor {
-    //     max number of links' to extract per page
+    /// Maximum number of links to extract per page
     max_links_per_page: usize,
 
-    // domains to prioritize for link extraction
+    /// Domains to prioritize for link extraction
     priority_domains: HashSet<String>,
 
-    //     File extensions to ignore
+    /// File extensions to ignore
     ignored_extensions: HashSet<String>,
 }
 
@@ -26,8 +25,8 @@ impl PageProcessor {
                 "jpg", "jpeg", "png", "gif", "pdf", "doc", "docx", "zip", "tar", "gz", "mp3",
                 "mp4", "avi",
             ]
-            .iter()
-            .map(|s| s.to_string()),
+                .iter()
+                .map(|s| s.to_string()),
         );
 
         Self {
@@ -37,27 +36,27 @@ impl PageProcessor {
         }
     }
 
-    // processing the HTML content to extract the data
+    /// Process HTML content and extract page data
     pub async fn process_page(
         &self,
         url: &str,
         html_content: &str,
         depth: u32,
-    ) -> Result<PageData, PageProcessorError> {
+    ) -> Result<PageData, ProcessorError> {
         let document = Html::parse_document(html_content);
 
-        // extract the basic page information
+        // Extract basic page information
         let title = self.extract_title(&document);
         let description = self.extract_description(&document);
         let keywords = self.extract_keywords(&document);
         let text_content = self.extract_text_content(&document);
 
-        // Extracting the outgoing links
-        let outgoing_links = self.extract_outgoing_links(&document, url, depth + 1)?;
+        // Extract outgoing links
+        let outgoing_links = self.extract_links(&document, url, depth + 1)?;
 
-        // calculate content metrics
+        // Calculate content metrics
         let word_count = text_content.split_whitespace().count();
-        let content_quality_score = self.calculate_content_quality_score(&text_content, &title);
+        let content_quality_score = self.calculate_content_quality(&text_content, &title);
 
         Ok(PageData {
             url: url.to_string(),
@@ -73,9 +72,9 @@ impl PageProcessor {
         })
     }
 
-    // extract page content
+    /// Extract page title
     fn extract_title(&self, document: &Html) -> Option<String> {
-        let title_selector = Selector::parse("title").Ok()?;
+        let title_selector = Selector::parse("title").ok()?; // Fixed: Ok() -> ok()
 
         document
             .select(&title_selector)
@@ -84,7 +83,7 @@ impl PageProcessor {
             .filter(|title| !title.is_empty())
     }
 
-    // extract the meta-description
+    /// Extract meta description
     fn extract_description(&self, document: &Html) -> Option<String> {
         let meta_selector = Selector::parse("meta[name='description']").ok()?;
 
@@ -96,8 +95,8 @@ impl PageProcessor {
             .filter(|description| !description.is_empty())
     }
 
-    // extract meta-keywords
-    fn extract_keywords(&self, document: &Html) -> Option<HashSet<String>> {
+    /// Extract meta keywords
+    fn extract_keywords(&self, document: &Html) -> Vec<String> {
         let meta_selector = Selector::parse("meta[name='keywords']").unwrap();
 
         document
@@ -114,12 +113,11 @@ impl PageProcessor {
             .unwrap_or_else(Vec::new)
     }
 
-    // Extract main text content
+    /// Extract main text content
     fn extract_text_content(&self, document: &Html) -> String {
-        // remove script and style elements
+        // Remove script and style elements
         let content_selectors = [
-            "p", "h1", "h2", "h3", "h4", "h5", "h6", "table", "br", "col", "article", "main",
-            "section", "div",
+            "p", "h1", "h2", "h3", "h4", "h5", "h6", "article", "main", "section", "div",
         ];
 
         let mut text_parts = Vec::new();
@@ -138,7 +136,7 @@ impl PageProcessor {
         text_parts.join(" ")
     }
 
-    // Extract outgoing links form the page
+    /// Extract outgoing links from the page
     fn extract_links(
         &self,
         document: &Html,
@@ -151,10 +149,10 @@ impl PageProcessor {
         let base_url_parsed = Url::parse(base_url).map_err(|_| ProcessorError::InvalidBaseUrl)?;
 
         let mut links = Vec::new();
-        let mut link_count = 0;
+        let mut link_count = 0; // Fixed: line_count -> link_count
 
         for element in document.select(&link_selector) {
-            if line_count >= self.max_links_per_page {
+            if link_count >= self.max_links_per_page { // Fixed: line_count -> link_count
                 break;
             }
 
@@ -175,79 +173,80 @@ impl PageProcessor {
         Ok(links)
     }
 
-    // Resolve relative urls and validate
+    /// Resolve relative URLs and validate
     fn resolve_and_validate_url(
         &self,
-        base_url: &str,
+        base_url: &Url, // Fixed: Changed parameter type from &str to &Url
         href: &str,
-        next_depth: u32,
+        depth: u32, // Fixed: Changed parameter name from next_depth to depth for consistency
     ) -> Result<Option<CrawlUrl>, ProcessorError> {
-
-        //  skip the obvious non-web links
-        if(href.starts_with("mailto:") || href.starts_with("tel:") || href.starts_with("javascript:")) {
+        // Skip obvious non-web links
+        if href.starts_with("mailto:") || href.starts_with("tel:") || href.starts_with("javascript:") {
             return Ok(None);
         }
 
-        // Resolve relative url
-        let absolute_url = base_url.join(href)
-        .map_err(|_| ProcessorError::URLResolutionError)?;
+        // Resolve relative URL
+        let absolute_url = base_url
+            .join(href)
+            .map_err(|_| ProcessorError::UrlResolutionError)?; // Fixed: URLResolutionError -> UrlResolutionError
 
         let url_str = absolute_url.to_string();
 
-        // check for ignored file extension
-        if let Some(extensions) = self.get_file_extension(&url_str) {
-            if self.ignored_extensions.contains(&extensions.to_lowercase()) {
+        // Check for ignored file extensions
+        if let Some(extension) = self.get_file_extension(&url_str) { // Fixed: extensions -> extension
+            if self.ignored_extensions.contains(&extension.to_lowercase()) {
                 return Ok(None);
             }
         }
 
-        // only crawl HTTP/ HTTPS URls
+        // Only crawl HTTP/HTTPS URLs
         if !matches!(absolute_url.scheme(), "http" | "https") {
             return Ok(None);
         }
 
-    //     calculate the priority based on domain and another factor
-        let priority = self.calculate_link_priority(&absolute_url,depth);
+        // Calculate priority based on domain and other factors
+        let priority = self.calculate_link_priority(&absolute_url, depth);
 
         Ok(Some(CrawlUrl {
             url: url_str,
             priority,
-            depth,
-            discoverd_at : chrono::Utc::now().timestamp() as u64,
+            depth: depth as u64,
+            discovered_at: chrono::Utc::now().timestamp() as u64, // Fixed: discoverd_at -> discovered_at
         }))
     }
 
-    // calculate content quality score(0.0, 1.0)
-    fn calculate_content_quality(&self, content: &str, title:&Option<String>)-> f64 {
+    /// Calculate content quality score (0.0 to 1.0)
+    fn calculate_content_quality(&self, content: &str, title: &Option<String>) -> f64 {
         let mut score = 0.0;
 
         // Length factor (optimal around 500-2000 words)
         let word_count = content.split_whitespace().count();
         let length_score = match word_count {
-            0..=50 =>0.1,
-            51..=200=>0.5,
-            201..=500=>0.8,
-            501..=2000=>1.0,
-            2001..=5000=>0.9_,
+            0..=50 => 0.1,
+            51..=200 => 0.5,
+            201..=500 => 0.8,
+            501..=2000 => 1.0,
+            2001..=5000 => 0.9, // Fixed: Removed underscore from 0.9_
             _ => 0.7,
         };
 
         score += length_score * 0.4;
 
-        // Title Presence
+        // Title presence
         if title.is_some() {
             score += 0.2;
         }
 
-        // content diversity (simple heuristic)
-        let unique_words: HashSet<_> = content
-            .to_lowercase()
-            .split_whitespace()
-            .count();
+        // Content diversity (simple heuristic)
+        let binding = content.to_lowercase();
 
-        let diversity_score = if word_count >0 {
+        let unique_words: HashSet<_> = binding
+            .split_whitespace()
+            .collect(); // Fixed: count() -> collect()
+
+        let diversity_score = if word_count > 0 {
             (unique_words.len() as f64 / word_count as f64).min(1.0)
-        }else {
+        } else {
             0.0
         };
 
@@ -256,11 +255,11 @@ impl PageProcessor {
         score.min(1.0)
     }
 
-    // calculate link priority
-    fn calculate_link_priority(&self, url:&Url , depth: u32) -> f64{
+    /// Calculate link priority
+    fn calculate_link_priority(&self, url: &Url, depth: u32) -> f64 {
         let mut priority = 1.0 / (depth as f64 + 1.0);
 
-        // domain priority boost
+        // Domain priority boost
         if let Some(host) = url.host_str() {
             for priority_domain in &self.priority_domains {
                 if host.contains(priority_domain) {
@@ -270,36 +269,39 @@ impl PageProcessor {
             }
         }
 
-        // path-based priority adjustments
+        // Path-based priority adjustments
         let path = url.path();
         if path.contains("/article/") || path.contains("/post/") || path.contains("/blog/") {
             priority *= 1.5;
         }
+
         priority
     }
 
-    // get the file extension form url
-    fn get_file_extension(&self, url:&str) -> Option<&str> {
-        url.split('?').next()?   // remove the query param
-            .split('#').next()?  // remove fragment
-            .split('/').last()?
-            .split('.').last()
+    /// Get file extension from URL
+    fn get_file_extension(&self, url: &str) -> Option<String> {
+        url.split('?').next()? // Remove query parameters
+            .split('#').next()? // Remove fragment
+            .split('/').last()? // Get filename
+            .split('.').last()  // Get extension
+            .filter(|ext| !ext.is_empty()) // Make sure it's not empty
+            .map(|ext| ext.to_string()) // Convert to owned String
     }
 
-    // Add priority domain
+    /// Add priority domain
     pub fn add_priority_domain(&mut self, domain: String) {
         self.priority_domains.insert(domain);
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ProcessorError{
-    #[error("Failed to pass css selector")]
+pub enum ProcessorError {
+    #[error("Failed to parse CSS selector")]
     SelectorParseError,
 
-    #[error("Invalid Base url")]
+    #[error("Invalid base URL")]
     InvalidBaseUrl,
 
     #[error("URL resolution error")]
-    URLResolutionError,
+    UrlResolutionError, // Fixed: URLResolutionError -> UrlResolutionError (consistent naming)
 }
