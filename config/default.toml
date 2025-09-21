@@ -4,27 +4,32 @@ max_pages = 10000
 concurrent_requests = 10
 seed_urls = [
     "https://example.com",
-    "https://news.ycombinator.com"
+    "https://httpbin.org/html"
 ]
-user_agent = "SearchEngineBot/1.0"
+user_agent = "WebCrawler/1.0"
 
 [network]
 request_timeout_secs = 30
 request_delay_ms = 1000
 max_retries = 3
 respect_robots_txt = true
+max_content_size_mb = 10
+max_redirects = 10
+connect_timeout_secs = 10  # This is correct
+user_agents = [
+    "Mozilla/5.0 (compatible; WebCrawler/1.0; +http://example.com/bot)",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+]
 
 [storage]
-database_url = "postgresql://localhost/crawler"
-redis_url = "redis://localhost:6379"
-enable_caching = true
+database_url = "sqlite://crawler.db"  # Changed: postgresql -> sqlite for easier testing
+enable_caching = false                # Changed: true -> false for easier testing
+redis_url = ""                       # Changed: redis URL -> empty for testing
 storage_path = "./data"
 
 [algorithms]
 primary_algorithm = "bfs"
-enable_opic = true
+enable_opic = false
 priority_boost_domains = [
-    "wikipedia.org",
-    ".edu",
-    ".gov"
+    "wikipedia.org", "github.com"
 ]

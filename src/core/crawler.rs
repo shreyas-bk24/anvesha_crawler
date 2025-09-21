@@ -2,26 +2,27 @@ use std::cmp::Ordering;
 use crate::config::CrawlerConfig;
 use crate::core::{UrlFrontier, PageProcessor};
 pub(crate) use crate::models::{CrawlUrl, PageData, CrawlStatistics};
+use crate::network::{HttpClient, NetworkError};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering}; // Fixed import
-use tokio::task::JoinSet;
-use tracing::{error, info};
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+use tokio::task::JoinHandle;
+use tracing::{error, info, debug, warn}; // Fixed: Use tracing consistently
 use crate::core::scheduler::CrawlScheduler;
 
 /// Main web crawler that orchestrates the crawling process
-#[derive(Clone)] // Add Clone derive
+#[derive(Clone)]
 pub struct WebCrawler {
     config: CrawlerConfig,
-    url_frontier: Arc<UrlFrontier>, // Wrap in Arc for sharing
-    page_processor: Arc<PageProcessor>, // Wrap in Arc for sharing
-    scheduler: Arc<CrawlScheduler>, // Fixed type name and wrap in Arc
+    url_frontier: Arc<UrlFrontier>,
+    page_processor: Arc<PageProcessor>,
+    scheduler: Arc<CrawlScheduler>,
+    http_client: Arc<HttpClient>,
 
     // Statistics tracking
-    pages_crawled: Arc<AtomicUsize>, // Fixed field name and type
+    pages_crawled: Arc<AtomicUsize>,
     pages_failed: Arc<AtomicUsize>,
     start_time: std::time::Instant,
 }
-
 
 impl WebCrawler {
     pub async fn new(config: CrawlerConfig) -> crate::Result<Self> {
@@ -33,6 +34,12 @@ impl WebCrawler {
             page_processor.add_priority_domain(domain.clone());
         }
 
+        // Create HTTP Client with config
+        let http_client = HttpClient::new()?
+            .with_timeout(std::time::Duration::from_secs(config.network.request_timeout_secs))
+            .with_user_agents(config.network.user_agents.clone())
+            .with_max_content_size(config.network.max_content_size_mb * 1024 * 1024);
+
         let scheduler = Arc::new(CrawlScheduler::new(&config));
 
         let crawler = Self {
@@ -40,7 +47,8 @@ impl WebCrawler {
             url_frontier,
             page_processor: Arc::new(page_processor),
             scheduler,
-            pages_crawled: Arc::new(AtomicUsize::new(0)), // Fixed field name
+            http_client: Arc::new(http_client),
+            pages_crawled: Arc::new(AtomicUsize::new(0)),
             pages_failed: Arc::new(AtomicUsize::new(0)),
             start_time: std::time::Instant::now(),
         };
@@ -55,21 +63,22 @@ impl WebCrawler {
         // Add seed URLs to frontier
         self.initialize_frontier().await?;
 
-        // Start crawling workers
-        let mut join_set = JoinSet::new();
+        // Start crawling workers using Vec<JoinHandle> instead of JoinSet
+        let mut worker_handles: Vec<JoinHandle<crate::Result<()>>> = Vec::new();
 
         // Spawn crawler worker tasks
-        for worker_id in 0..self.config.crawler.concurrent_requests { // Fixed field name
+        for worker_id in 0..self.config.crawler.concurrent_requests {
             let crawler_clone = self.clone();
-            join_set.spawn(async move {
+            let handle = tokio::spawn(async move { // Fixed: Use tokio::spawn
                 crawler_clone.crawler_worker(worker_id).await
             });
+            worker_handles.push(handle);
         }
 
         // Wait for all workers to complete
-        while let Some(result) = join_set.join_next().await { // Fixed method name
-            if let Err(e) = result {
-                error!("Web crawler worker failed: {}", e);
+        for handle in worker_handles { // Fixed: Use for loop instead of while let
+            if let Err(e) = handle.await {
+                error!("Web crawler worker task failed: {}", e);
             }
         }
 
@@ -81,7 +90,7 @@ impl WebCrawler {
     }
 
     /// Individual crawler worker
-    async fn crawler_worker(&self, worker_id: usize) -> crate::Result<()> { // Remove mut self
+    async fn crawler_worker(&self, worker_id: usize) -> crate::Result<()> {
         info!("Starting crawler worker {}", worker_id);
 
         while self.pages_crawled.load(AtomicOrdering::Relaxed) < self.config.crawler.max_pages {
@@ -104,12 +113,12 @@ impl WebCrawler {
             }
 
             // Extract domain for rate limiting
-            let domain = self.extract_domain(&crawl_url.url)?; // Fixed method name
+            let domain = self.extract_domain(&crawl_url.url)?;
 
             // Crawl the page
             match self.crawl_single_page(crawl_url, &domain).await {
                 Ok(_) => {
-                    self.pages_crawled.fetch_add(1, AtomicOrdering::Relaxed); // Fixed increment logic
+                    self.pages_crawled.fetch_add(1, AtomicOrdering::Relaxed);
                 }
                 Err(e) => {
                     self.pages_failed.fetch_add(1, AtomicOrdering::Relaxed);
@@ -128,8 +137,6 @@ impl WebCrawler {
 
         // Use scheduler to manage the request
         let page_data = self.scheduler.schedule_crawl(domain, || async {
-            // This is where you'd integrate with network module
-            // For now, this is a placeholder
             self.fetch_and_process_page(crawl_url.clone()).await
         }).await?;
 
@@ -141,28 +148,45 @@ impl WebCrawler {
 
         info!("Crawled: {} (found {} new links)", url, links_added);
 
-        // Here you'd save the page data to storage
-        // self.save_page_data(page_data).await?;
-
         Ok(())
     }
 
-    /// Fetch and process a single page (placeholder)
+    /// Fetch and process a single page (REAL HTTP CLIENT)
     async fn fetch_and_process_page(&self, crawl_url: CrawlUrl) -> Result<PageData, Box<dyn std::error::Error + Send + Sync>> {
-        // This is a placeholder - you'll implement actual HTTP fetching in the network module
-        // For now, return mock data
-        Ok(PageData {
-            url: crawl_url.url,
-            title: Some("Mock Title".to_string()),
-            description: None,
-            keywords: vec![],
-            content: "Mock content".to_string(),
-            outgoing_links: vec![],
-            word_count: 2,
-            content_quality_score: 0.5,
-            crawled_at: chrono::Utc::now(),
-            depth: crawl_url.depth as u32,
-        })
+        let url = crawl_url.url.clone();
+        debug!("Fetching page: {} (depth: {})", url, crawl_url.depth);
+
+        // Use HTTP client to fetch the page
+        let http_response = self.http_client.fetch(&url).await
+            .map_err(|e| {
+                warn!("Failed to fetch page {}: {}", url, e);
+                e
+            })?;
+
+        info!("Fetched page: {} - {} bytes in {}ms",
+            url,
+            http_response.content_length.unwrap_or(0),
+            http_response.fetch_time_ms
+        );
+
+        // Use page processor to extract data from real HTML
+        let page_data = self.page_processor.process_page(
+            &url,
+            &http_response.content,
+            crawl_url.depth as u32
+        ).await.map_err(|e| {
+            warn!("Page processing failed for {}: {}", url, e);
+            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+        })?;
+
+        info!(
+            "Processed {} - Found {} links, quality: {:.2}",
+            url,
+            page_data.outgoing_links.len(),
+            page_data.content_quality_score
+        );
+
+        Ok(page_data)
     }
 
     /// Initialize the URL frontier with seed URLs
@@ -189,7 +213,7 @@ impl WebCrawler {
     }
 
     /// Generate crawling statistics
-    async fn generate_statistics(&self) -> CrawlStatistics {
+    pub(crate) async fn generate_statistics(&self) -> CrawlStatistics {
         let frontier_stats = self.url_frontier.get_stats().await;
         let scheduler_stats = self.scheduler.get_stats();
 

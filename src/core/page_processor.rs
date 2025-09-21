@@ -210,7 +210,7 @@ impl PageProcessor {
         Ok(Some(CrawlUrl {
             url: url_str,
             priority,
-            depth: depth as u64,
+            depth: depth,
             discovered_at: chrono::Utc::now().timestamp() as u64, // Fixed: discoverd_at -> discovered_at
         }))
     }

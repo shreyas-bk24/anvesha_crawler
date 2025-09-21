@@ -4,11 +4,13 @@ pub mod config;
 pub mod core;
 pub mod models;
 pub mod utils;
+pub mod network;
 
 // Re-export commonly used types
 pub use config::CrawlerConfig;
 pub use crate::core::crawler::WebCrawler;
 pub use models::{CrawlUrl, PageData, CrawlResult, CrawlStatistics};
+pub use network::{HttpClient, NetworkError};
 
 /// Main crawler error type
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;

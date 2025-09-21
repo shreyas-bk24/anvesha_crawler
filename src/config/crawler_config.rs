@@ -24,6 +24,11 @@ pub struct NetworkSettings {
     pub request_delay_ms: u64,
     pub max_retries: u32,
     pub respect_robots_txt: bool,
+
+    pub max_content_size_mb: usize,
+    pub user_agents: Vec<String>,
+    pub max_redirects: u32,
+    pub connect_timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +45,7 @@ pub struct AlgorithmSettings {
     pub enable_opic: bool,
     pub priority_boost_domains: Vec<String>,
 }
+
 
 impl CrawlerConfig {
     pub fn from_file(path: &str) -> crate::Result<Self> {
@@ -62,6 +68,13 @@ impl CrawlerConfig {
                 request_delay_ms: 1000,
                 max_retries: 3,
                 respect_robots_txt: true,
+                max_content_size_mb: 10,
+                user_agents: vec![
+                    "Mozilla/5.0 (compatible; WebCrawler/1.0; +http://example.com/bot)".to_string(),
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36".to_string(),
+                ],
+                max_redirects: 10,
+                connect_timeout_secs: 10
             },
             storage: StorageSettings {
                 database_url: "postgresql://localhost/crawler".to_string(),

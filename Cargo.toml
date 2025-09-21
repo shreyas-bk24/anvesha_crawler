@@ -17,3 +17,13 @@ url = "2.5.7"
 dashmap = "7.0.0-rc2"
 scraper = "0.24.0"
 thiserror = "2.0.16"
+reqwest = { version = "0.12.23", features = ["json", "stream", "gzip", "brotli"] }
+encoding_rs = "0.8.35"
+log = "0.4.28"
+assert = "0.7.5"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.2"  # For mocking HTTP responses
+serial_test = "3.0"  # For tests that need to run sequentially
+
