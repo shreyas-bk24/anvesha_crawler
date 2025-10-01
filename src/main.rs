@@ -21,6 +21,10 @@ enum Commands {
     Crawl {
         #[arg(short, long)]
         seed_urls: Vec<String>,
+        #[arg(long)]
+        save_to_db: bool,
+        #[arg(long, default_value = "10")]
+        max_pages: usize,
     },
     Api {
         #[arg(short, long, default_value = "3000")]
@@ -41,7 +45,7 @@ async fn main() -> crawler::Result<()> { // Fixed: search_engine_crawler -> craw
     info!("Loaded configuration from: {}", args.config);
 
     match args.command {
-        Some(Commands::Crawl { seed_urls }) => {
+        Some(Commands::Crawl { seed_urls, .. }) => {
             let mut crawler_config = config;
             if !seed_urls.is_empty() {
                 crawler_config.crawler.seed_urls = seed_urls; // Fixed: Added .crawler field

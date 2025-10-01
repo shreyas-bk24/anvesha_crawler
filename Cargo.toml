@@ -9,7 +9,7 @@ tracing = "0.1.41"
 tokio = { version = "1.47.1", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
 toml = "0.9.5"
-sqlx = "0.8.6"
+sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "sqlite", "chrono"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 send = "0.8.0"
@@ -21,6 +21,17 @@ reqwest = { version = "0.12.23", features = ["json", "stream", "gzip", "brotli"]
 encoding_rs = "0.8.35"
 log = "0.4.28"
 assert = "0.7.5"
+tantivy = "0.25.0"
+moka = { version = "0.12.10", features = ["sync"] }
+sha2 = "0.11.0-rc.2"
+csv = "1.3.1"
+tempfile = "3.22.0"
+serde_json = "1.0.145"
+hex = "0.4.3"
+
+
+[patch-crates-io]
+time = "0.1"
 
 [dev-dependencies]
 tokio-test = "0.4"
