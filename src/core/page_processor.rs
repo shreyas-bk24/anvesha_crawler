@@ -2,7 +2,7 @@
 use crate::models::{CrawlUrl, PageData};
 use scraper::{Html, Selector};
 use std::collections::HashSet;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 use url::Url;
 
 /// Processes HTML pages and extracts useful information

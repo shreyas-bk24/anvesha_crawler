@@ -85,7 +85,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgConnectOptions;
 #[cfg(feature = "database")]
 use sqlx::{ConnectOptions, PgPool};
-use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseConfig {

@@ -2,7 +2,7 @@ use crate::config::CrawlerConfig;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::time::{sleep, Duration, Instant};
-use tracing::{debug, warn, info};
+use tracing::{debug, warn};
 
 /// Manages crawling scheduling and rate limiting
 pub struct CrawlScheduler {

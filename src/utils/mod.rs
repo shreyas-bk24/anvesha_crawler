@@ -5,7 +5,6 @@ mod bloom_filter;
 pub use url_utils::*;
 pub use bloom_filter::*;
 pub use logging::*;
-pub use metrics::*;
 
 // Utility functions for the crawler
 

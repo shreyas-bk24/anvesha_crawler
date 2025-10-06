@@ -22,9 +22,10 @@ user_agents = [
 ]
 
 [storage]
-database_url = "sqlite://crawler.db"  # Changed: postgresql -> sqlite for easier testing
-enable_caching = false                # Changed: true -> false for easier testing
-redis_url = ""                       # Changed: redis URL -> empty for testing
+database_url = "postgresql://crawler_user:crawler_pass@localhost:5432/crawler_db"
+max_connections = 10
+enable_caching = false
+enable_foreign_keys = true  # Not used by PostgreSQL but keep for compatibility
 storage_path = "./data"
 
 [algorithms]

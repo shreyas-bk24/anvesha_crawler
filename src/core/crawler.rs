@@ -1,13 +1,13 @@
-use std::cmp::Ordering;
 use crate::config::CrawlerConfig;
 use crate::core::{UrlFrontier, PageProcessor};
 pub(crate) use crate::models::{CrawlUrl, PageData, CrawlStatistics};
-use crate::network::{HttpClient, NetworkError};
+use crate::network::HttpClient;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use tokio::task::JoinHandle;
-use tracing::{error, info, debug, warn}; // Fixed: Use tracing consistently
+use tracing::{error, info, debug, warn};
 use crate::core::scheduler::CrawlScheduler;
+use crate::storage::repository::PageRepository;
 
 /// Main web crawler that orchestrates the crawling process
 #[derive(Clone)]
@@ -56,27 +56,45 @@ impl WebCrawler {
         Ok(crawler)
     }
 
-    /// Start the crawling process
+    // 🔥 FIX 1: Correct syntax for start_crawling_with_repository
+    pub async fn start_crawling_with_repository(
+        &self,
+        repository: Option<PageRepository>
+    ) -> crate::Result<CrawlStatistics> {
+        self.crawl_internal(repository).await
+    }
+
+    /// Start the crawling process (without database)
     pub async fn start_crawling(&self) -> crate::Result<CrawlStatistics> {
+        self.crawl_internal(None).await
+    }
+
+    // 🔥 FIX 2: Add the missing crawl_internal method
+    async fn crawl_internal(&self, repository: Option<PageRepository>) -> crate::Result<CrawlStatistics> {
         info!("Starting web crawler with {} seed URLs", self.config.crawler.seed_urls.len());
 
         // Add seed URLs to frontier
         self.initialize_frontier().await?;
 
-        // Start crawling workers using Vec<JoinHandle> instead of JoinSet
+        // Start crawling workers
         let mut worker_handles: Vec<JoinHandle<crate::Result<()>>> = Vec::new();
+
+        // Clone repository for workers
+        let repo_arc = repository.map(Arc::new);
 
         // Spawn crawler worker tasks
         for worker_id in 0..self.config.crawler.concurrent_requests {
             let crawler_clone = self.clone();
-            let handle = tokio::spawn(async move { // Fixed: Use tokio::spawn
-                crawler_clone.crawler_worker(worker_id).await
+            let repo_clone = repo_arc.clone();
+
+            let handle = tokio::spawn(async move {
+                crawler_clone.crawler_worker(worker_id, repo_clone).await
             });
             worker_handles.push(handle);
         }
 
         // Wait for all workers to complete
-        for handle in worker_handles { // Fixed: Use for loop instead of while let
+        for handle in worker_handles {
             if let Err(e) = handle.await {
                 error!("Web crawler worker task failed: {}", e);
             }
@@ -89,8 +107,12 @@ impl WebCrawler {
         Ok(stats)
     }
 
-    /// Individual crawler worker
-    async fn crawler_worker(&self, worker_id: usize) -> crate::Result<()> {
+    // 🔥 FIX 3: Update crawler_worker to accept repository
+    async fn crawler_worker(
+        &self,
+        worker_id: usize,
+        repository: Option<Arc<PageRepository>>
+    ) -> crate::Result<()> {
         info!("Starting crawler worker {}", worker_id);
 
         while self.pages_crawled.load(AtomicOrdering::Relaxed) < self.config.crawler.max_pages {
@@ -98,7 +120,6 @@ impl WebCrawler {
             let crawl_url = match self.url_frontier.next_url().await {
                 Some(url) => url,
                 None => {
-                    // No more URLs, check if we should wait or exit
                     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
                     if self.url_frontier.is_empty().await {
                         break;
@@ -116,7 +137,7 @@ impl WebCrawler {
             let domain = self.extract_domain(&crawl_url.url)?;
 
             // Crawl the page
-            match self.crawl_single_page(crawl_url, &domain).await {
+            match self.crawl_single_page(crawl_url, &domain, repository.as_ref()).await {
                 Ok(_) => {
                     self.pages_crawled.fetch_add(1, AtomicOrdering::Relaxed);
                 }
@@ -131,14 +152,38 @@ impl WebCrawler {
         Ok(())
     }
 
-    /// Crawl a single page
-    async fn crawl_single_page(&self, crawl_url: CrawlUrl, domain: &str) -> crate::Result<()> {
+    // 🔥 FIX 4: Update crawl_single_page to save to database
+    async fn crawl_single_page(
+        &self,
+        crawl_url: CrawlUrl,
+        domain: &str,
+        repository: Option<&Arc<PageRepository>>
+    ) -> crate::Result<()> {
         let url = crawl_url.url.clone();
 
         // Use scheduler to manage the request
         let page_data = self.scheduler.schedule_crawl(domain, || async {
             self.fetch_and_process_page(crawl_url.clone()).await
         }).await?;
+
+        // 🔥 NEW: Save to database if repository exists
+        if let Some(repo) = repository {
+            match repo.save_page(&page_data, 0).await {
+                Ok(page_id) => {
+                    info!("💾 Saved page to database: ID {}, URL: {}", page_id, page_data.url);
+
+                    // Save links if any
+                    if !page_data.outgoing_links.is_empty() {
+                        if let Err(e) = repo.save_links(page_id, &page_data.outgoing_links).await {
+                            warn!("⚠️ Failed to save links: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("⚠️ Failed to save page to database: {}", e);
+                }
+            }
+        }
 
         // Mark as crawled
         self.url_frontier.mark_crawled(&url);
@@ -194,7 +239,7 @@ impl WebCrawler {
         for seed_url in &self.config.crawler.seed_urls {
             let crawl_url = CrawlUrl {
                 url: seed_url.clone(),
-                priority: 10.0, // High priority for seed URLs
+                priority: 10.0,
                 depth: 0,
                 discovered_at: chrono::Utc::now().timestamp() as u64,
             };
@@ -215,7 +260,6 @@ impl WebCrawler {
     /// Generate crawling statistics
     pub(crate) async fn generate_statistics(&self) -> CrawlStatistics {
         let frontier_stats = self.url_frontier.get_stats().await;
-        let scheduler_stats = self.scheduler.get_stats();
 
         CrawlStatistics {
             pages_crawled: self.pages_crawled.load(AtomicOrdering::Relaxed),

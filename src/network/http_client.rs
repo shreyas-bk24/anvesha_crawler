@@ -5,7 +5,7 @@ use reqwest::{Client, ClientBuilder, redirect::Policy};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering}; // Fixed: removed duplicate and typo
 use std::time::{Duration, Instant};
-use tracing::{debug, warn, info}; // Fixed: removed duplicate debug import
+use tracing::{debug, info}; // Fixed: removed duplicate debug import
 
 pub struct HttpClient {
     client: Client,

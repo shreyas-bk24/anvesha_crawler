@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrawlerConfig {
@@ -34,6 +33,7 @@ pub struct NetworkSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageSettings {
     pub database_url: String,
+    pub max_connections: u32,
     pub redis_url: Option<String>,
     pub enable_caching: bool,
     pub storage_path: String,
@@ -78,6 +78,7 @@ impl CrawlerConfig {
             },
             storage: StorageSettings {
                 database_url: "postgresql://localhost/crawler".to_string(),
+                max_connections: 10,
                 redis_url: None,
                 enable_caching: true,
                 storage_path: "./data".to_string(),
