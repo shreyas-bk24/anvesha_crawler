@@ -2,11 +2,11 @@
 CREATE TABLE IF NOT EXISTS domains (
                                        domain VARCHAR(255) PRIMARY KEY,
     robots_txt TEXT,
-    robots_fetched_at TIMESTAMP,
+    robots_fetched_at TIMESTAMPTZ,
     crawl_delay INTEGER DEFAULT 1000,
     page_count INTEGER DEFAULT 0,
-    avg_quality_score REAL,
-    last_crawled TIMESTAMP,
+    avg_quality_score DOUBLE PRECISION,
+    last_crawled TIMESTAMPTZ,
     crawl_allowed BOOLEAN DEFAULT TRUE
     );
 
@@ -19,12 +19,12 @@ CREATE TABLE IF NOT EXISTS pages (
     description TEXT,
     content TEXT,
     content_hash VARCHAR(64),
-    quality_score REAL DEFAULT 0.0,
+    quality_score DOUBLE PRECISION DEFAULT 0.0,
     word_count INTEGER DEFAULT 0,
     language VARCHAR(10) DEFAULT 'en',
     crawl_depth INTEGER DEFAULT 0,
-    crawled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified TIMESTAMP,
+    crawled_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    last_modified TIMESTAMPTZ,
     status_code INTEGER,
     content_type VARCHAR(100),
     content_length INTEGER
@@ -37,15 +37,15 @@ CREATE TABLE IF NOT EXISTS links (
                                      target_url TEXT NOT NULL,
                                      anchor_text TEXT,
                                      link_position INTEGER DEFAULT 0,
-                                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                                      FOREIGN KEY (source_page_id) REFERENCES pages(id) ON DELETE CASCADE,
     FOREIGN KEY (target_page_id) REFERENCES pages(id) ON DELETE SET NULL
     );
 
 CREATE TABLE IF NOT EXISTS crawl_sessions (
                                               id SERIAL PRIMARY KEY,
-                                              started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                              ended_at TIMESTAMP,
+                                              started_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                                              ended_at TIMESTAMPTZ,
                                               pages_crawled INTEGER DEFAULT 0,
                                               pages_failed INTEGER DEFAULT 0,
                                               seed_urls TEXT,

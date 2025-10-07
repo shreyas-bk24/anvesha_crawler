@@ -1,6 +1,8 @@
+use std::path::Path;
 use clap::Parser;
 use crawler::{init, CrawlerConfig, WebCrawler};
 use tracing::info;
+use crawler::search::query::SearchQuery;
 use crawler::storage::database::{Database, DatabaseConfig};
 use crawler::storage::repository::PageRepository;
 
@@ -27,6 +29,17 @@ enum Commands {
         save_to_db: bool,
         #[arg(long, default_value = "10")]
         max_pages: usize,
+    },
+    Index {
+        #[arg(long, default_value = "./search_index")]
+        index_path: String,
+    },
+    Search {
+        query: String,
+        #[arg(long, default_value = "./search_index")]
+        index_path: String,
+        #[arg(long, default_value = "10")]
+        limit: usize,
     },
     Api {
         #[arg(short, long, default_value = "3000")]
@@ -86,6 +99,53 @@ async fn main() -> crawler::Result<()> {
             // 🔥 SIMPLE: Pass repository to the crawl method
             crawler.start_crawling_with_repository(repository).await?;
         }
+
+        Some(Commands::Index { index_path }) => {
+            use crawler::search::SearchIndexer;
+            use crawler::storage::database::{ Database, DatabaseConfig };
+            use crawler::storage::repository::PageRepository;
+
+            info!("Starting search indexing...");
+
+            // connect to database
+            let db_config = DatabaseConfig::default();
+            let pool = Database::connect(&db_config).await?;
+            let repository = PageRepository::new(pool);
+
+            // create indexer and index all pages
+            let indexer = SearchIndexer::new(Path::new(&index_path))?;
+            let count= indexer.index_all_pages(&repository).await?;
+
+            // TODO : Fix this bug count is acting as a fn convert it into integer
+            println!("Indexing completed! {:?} pages indexed", count);
+        }
+
+        Some(Commands::Search { query, index_path, limit }) => {
+            use crawler::search::SearchIndexer;
+            use std::path::Path;
+
+            info!("Searching for : '{}'",query);
+
+            // create search query engine
+            let search_engine = SearchQuery::new(Path::new(&index_path))?;
+
+            // execute search
+            let results = search_engine.search(&query, limit)?;
+
+            // display results
+            println!("\n Search results for : '{}'\n", query);
+            println!("Found {} results : \n", results.len());
+
+            for (i, result) in results.iter().enumerate() {
+                println!(" {}. {} (score : {:.3})",i+1, result.url, result.score);
+                if let Some(ref title) = result.title {
+                    println!("Title: {}", title);
+                }
+                println!(" Domain: {} | Quality: {:.3}", result.domain, result.quality_score);
+                println!();
+            }
+        }
+
         Some(Commands::Api { port }) => {
             println!("API server not implemented yet. Port: {}", port);
         }
@@ -96,6 +156,7 @@ async fn main() -> crawler::Result<()> {
             let crawler = WebCrawler::new(config).await?;
             crawler.start_crawling().await?;
         }
+        _ => {}
     }
 
     Ok(())
