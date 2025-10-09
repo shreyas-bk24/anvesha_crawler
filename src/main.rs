@@ -1,7 +1,7 @@
 use std::path::Path;
 use clap::Parser;
 use crawler::{init, CrawlerConfig, WebCrawler};
-use tracing::info;
+use tracing::{info, warn};
 use crawler::search::query::SearchQuery;
 use crawler::storage::database::{Database, DatabaseConfig};
 use crawler::storage::repository::PageRepository;
@@ -35,11 +35,43 @@ enum Commands {
         index_path: String,
     },
     Search {
+        /// Search query string
         query: String,
+
         #[arg(long, default_value = "./search_index")]
         index_path: String,
+
+        /// Maximum number of results
         #[arg(long, default_value = "10")]
         limit: usize,
+
+        /// 🔥 FIX: Add offset parameter
+        #[arg(long, default_value = "0")]
+        offset: usize,
+
+        /// Filter by domain
+        #[arg(long)]
+        domain: Option<String>,
+
+        /// Minimum quality score
+        #[arg(long)]
+        min_quality: Option<f64>,
+
+        /// Maximum quality score
+        #[arg(long)]
+        max_quality: Option<f64>,
+
+        /// Sort by: relevance, quality, or date
+        #[arg(long, default_value = "relevance")]
+        sort: String,
+
+        /// Generate content snippets
+        #[arg(long)]
+        snippets: bool,
+
+        /// Highlight matched terms
+        #[arg(long)]
+        highlight: bool,
     },
     Api {
         #[arg(short, long, default_value = "3000")]
@@ -120,17 +152,43 @@ async fn main() -> crawler::Result<()> {
             println!("Indexing completed! {:?} pages indexed", count);
         }
 
-        Some(Commands::Search { query, index_path, limit }) => {
-            use crawler::search::SearchIndexer;
+        Some(Commands::Search { query, index_path, limit, domain, offset, min_quality, max_quality, sort, snippets, highlight }) => {
+            use crawler::search::{SearchQuery};
+            use crawler::search::filters::{SearchFilter, SortBy};
             use std::path::Path;
+            use std::str::FromStr;
 
             info!("Searching for : '{}'",query);
+
+            // Build filters
+            let mut filters = SearchFilter::new();
+            if let Some(domain) = domain {
+                filters = filters.with_domain(domain.clone());
+                info!("Filter : Domain = '{}'", domain);
+            }
+
+            if let Some(min_q) = min_quality {
+                filters = filters.with_min_quality(min_q);
+                info!("   Filter: min_quality = {}", min_q);
+            }
+            if let Some(max_q) = max_quality {
+                filters = filters.with_max_quality(max_q);
+                info!("   Filter: max_quality = {}", max_q);
+            }
+
+            // Parse sort option
+            let sort_by = SortBy::from_str(&sort)
+                .unwrap_or_else(|e| {
+                    warn!("Invalid sort option '{}', using relevance", sort);
+                    SortBy::Relevance
+                });
+
 
             // create search query engine
             let search_engine = SearchQuery::new(Path::new(&index_path))?;
 
             // execute search
-            let results = search_engine.search(&query, limit)?;
+            let results = search_engine.search_with_filters(&query, limit, filters, sort_by, offset, snippets, highlight)?;
 
             // display results
             println!("\n Search results for : '{}'\n", query);
@@ -142,6 +200,18 @@ async fn main() -> crawler::Result<()> {
                     println!("Title: {}", title);
                 }
                 println!(" Domain: {} | Quality: {:.3}", result.domain, result.quality_score);
+
+                // printing the snippet
+                if snippets{
+                    match & result.snippet {
+                        Some(snippet) => {
+                            println!("Snippet: {}", snippet);
+                        }
+                        None => {
+                            println!("Snippet: Snippet requested but not generated");
+                        }
+                    }
+                }
                 println!();
             }
         }
