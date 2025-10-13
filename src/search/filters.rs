@@ -58,6 +58,7 @@ impl SearchFilter {
 pub enum SortBy{
     Relevance,
     Quality,
+    PageRank,
     Date
 }
 
@@ -73,6 +74,7 @@ impl std::str::FromStr for SortBy{
         match s.to_lowercase().as_str() {
             "relevance" => Ok(SortBy::Relevance),
             "quality" => Ok(SortBy::Quality),
+            "pagerank" | "rank" => Ok(SortBy::PageRank),
             "date" => Ok(SortBy::Date),
             _=> Err(format!("Invalid sort option: {}", s)),
         }

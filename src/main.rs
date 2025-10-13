@@ -5,6 +5,8 @@ use tracing::{info, warn};
 use crawler::search::query::SearchQuery;
 use crawler::storage::database::{Database, DatabaseConfig};
 use crawler::storage::repository::PageRepository;
+use crawler::algorithms::{LinkGraph, PageRankCalculator};
+use crate::Commands::CalculatePageRank;
 
 #[derive(Parser)]
 #[command(name = "search-crawler")]
@@ -45,7 +47,7 @@ enum Commands {
         #[arg(long, default_value = "10")]
         limit: usize,
 
-        /// 🔥 FIX: Add offset parameter
+        /// FIX: Add offset parameter
         #[arg(long, default_value = "0")]
         offset: usize,
 
@@ -72,6 +74,10 @@ enum Commands {
         /// Highlight matched terms
         #[arg(long)]
         highlight: bool,
+    },
+    CalculatePageRank {
+        #[arg(long, default_value = "10")]
+        top: usize,
     },
     Api {
         #[arg(short, long, default_value = "3000")]
@@ -103,9 +109,9 @@ async fn main() -> crawler::Result<()> {
             // Update max pages if provided
             crawler_config.crawler.max_pages = max_pages;
 
-            // 🔥 SIMPLE: Initialize database if save_to_db is true
+            // SIMPLE: Initialize database if save_to_db is true
             let repository = if save_to_db {
-                info!("🗄️ Database storage enabled - initializing PostgreSQL database");
+                info!("Database storage enabled - initializing PostgreSQL database");
 
                 let db_config = DatabaseConfig {
                     database_url: crawler_config.storage.database_url.clone(),
@@ -117,18 +123,18 @@ async fn main() -> crawler::Result<()> {
                 // Connect and migrate database
                 let pool = Database::connect(&db_config).await?;
                 Database::migrate(&pool).await?;
-                info!("✅ Database initialized and migrations completed");
+                info!("Database initialized and migrations completed");
 
                 Some(PageRepository::new(pool))
             } else {
-                info!("📝 Running crawler without database storage");
+                info!("Running crawler without database storage");
                 None
             };
 
             // 🔥 SIMPLE: Just create crawler normally
             let crawler = WebCrawler::new(crawler_config).await?;
 
-            // 🔥 SIMPLE: Pass repository to the crawl method
+            // SIMPLE: Pass repository to the crawl method
             crawler.start_crawling_with_repository(repository).await?;
         }
 
@@ -151,6 +157,51 @@ async fn main() -> crawler::Result<()> {
             // TODO : Fix this bug count is acting as a fn convert it into integer
             println!("Indexing completed! {:?} pages indexed", count);
         }
+
+        Some(Commands::CalculatePageRank { top }) => {
+            info!("Starting PageRank calculation...");
+
+            // Initialize database connection
+            let db_config = DatabaseConfig::default();
+            let pool = Database::connect(&db_config).await?;
+            let repository = PageRepository::new(pool);
+
+            // Load graph from repository
+            let graph = LinkGraph::from_repository(&repository).await?;
+            info!("Graph Stats: {} nodes, {} dangling nodes",
+        graph.node_count(),
+        graph.dangling_nodes().len());
+
+            // Calculate PageRank
+            let calculator = PageRankCalculator::new();
+            let ranks = calculator.calculate(&graph);
+
+            // Store PageRank values using batch update for efficiency
+            info!("Storing PageRank values...");
+            let ranks_vec: Vec<(String, f64)> = ranks.iter()
+                .map(|(url, rank)| (url.clone(), *rank))
+                .collect();
+
+            repository.batch_update_pagerank(&ranks_vec).await?;
+
+            // Display top pages
+            let top_pages = calculator.get_top_pages(&ranks, top);
+            println!("\nTop {} Pages by PageRank:\n", top);
+            println!("{:<6} {:<12} {}", "Rank", "PageRank", "URL");
+            println!("{}", "=".repeat(80));
+
+            for (i, (url, rank)) in top_pages.iter().enumerate() {
+                println!("{:<6} {:<12.6} {}",
+                         format!("{}.", i + 1),
+                         rank,
+                         url
+                );
+            }
+
+            println!("\nPageRank calculation complete!");
+        }
+
+
 
         Some(Commands::Search { query, index_path, limit, domain, offset, min_quality, max_quality, sort, snippets, highlight }) => {
             use crawler::search::{SearchQuery};
@@ -195,12 +246,13 @@ async fn main() -> crawler::Result<()> {
             println!("Found {} results : \n", results.len());
 
             for (i, result) in results.iter().enumerate() {
-                println!(" {}. {} (score : {:.3})",i+1, result.url, result.score);
+                println!(" {}. {} (score : {:.3}, pagerank:  {:.6})", i+1, result.url, result.score, result.pagerank);
                 if let Some(ref title) = result.title {
                     println!("Title: {}", title);
                 }
                 println!(" Domain: {} | Quality: {:.3}", result.domain, result.quality_score);
 
+                
                 // printing the snippet
                 if snippets{
                     match & result.snippet {

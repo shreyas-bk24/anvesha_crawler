@@ -7,6 +7,7 @@ pub mod utils;
 pub mod network;
 pub mod storage;
 pub mod search;
+pub mod algorithms;
 
 // Re-export commonly used types
 pub use config::CrawlerConfig;
