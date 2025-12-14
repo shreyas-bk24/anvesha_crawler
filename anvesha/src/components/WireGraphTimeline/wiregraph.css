@@ -1,0 +1,42 @@
+.wiregraph {
+  position: relative;
+  min-height: 160vh;
+  font-family: "JetBrains Mono", monospace;
+  color: #f7f7f9;
+}
+
+.wiregraph-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+
+.wg-node {
+  position: absolute;
+  pointer-events: none;
+}
+
+.wg-node .label {
+  position: absolute;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+}
+
+.wg-node .dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8a8f98;
+  opacity: 0.8;
+
+  /* exact endpoint */
+  transform: translate(-50%, -50%);
+}
+
+.wg-node.redacted .label::after {
+  content: " ×";
+  opacity: 0.4;
+}

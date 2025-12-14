@@ -1,0 +1,41 @@
+.timeline-thread {
+  position: relative;
+  min-height: 160vh;
+  background: transparent;
+  font-family: "JetBrains Mono", monospace;
+  color: #f7f7f9;
+}
+
+.timeline-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.6;
+}
+
+.timeline-nodes {
+  position: relative;
+  z-index: 3;
+}
+
+.node {
+  position: absolute;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  opacity: 0.85;
+  max-width: 220px;
+  pointer-events: none;
+}
+
+.node::before {
+  content: "●";
+  margin-right: 0.5rem;
+  opacity: 0.6;
+}
+
+.node.redacted {
+  filter: blur(5px);
+  opacity: 0.4;
+}

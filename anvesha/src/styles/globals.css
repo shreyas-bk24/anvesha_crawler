@@ -1,0 +1,71 @@
+#root {
+  position: relative;
+  min-height: 100vh;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0b0f14;
+}
+
+#root,
+.app-root {
+  min-height: 100vh;
+  background: #0b0f14;
+}
+
+#root::before {
+  #root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+
+  background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'>\
+<filter id='n'>\
+  <feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='5'/>\
+</filter>\
+<rect width='180' height='180' filter='url(%23n)' opacity='0.6'/>\
+</svg>");
+
+  opacity: 0.045;
+  mix-blend-mode: soft-light;
+}
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+
+  background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'>\
+<filter id='n'>\
+  <feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='5'/>\
+</filter>\
+<rect width='200' height='200' filter='url(%23n)' opacity='0.6'/>\
+</svg>");
+
+  opacity: 0.12;              /* TEMP: make it visible */
+  mix-blend-mode: normal;    /* TEMP: disable overlay */
+}
+
+.system-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+@keyframes spiralRotate {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}

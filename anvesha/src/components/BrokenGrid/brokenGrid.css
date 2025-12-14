@@ -1,0 +1,37 @@
+.broken-grid {
+  position: relative;
+  min-height: 120vh;
+  background: #0b0f14;
+  overflow: hidden;
+}
+
+.bg-item {
+  position: absolute;
+  font-family: "JetBrains Mono", monospace;
+  color: rgba(247, 247, 249, 0.12);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.left {
+  top: 30%;
+  left: 8%;
+  font-size: 1.8rem;
+}
+
+.right {
+  top: 55%;
+  right: 6%;
+  font-size: 2.4rem;
+}
+
+.center {
+  top: 40%;
+  left: 35%;
+  font-size: 1.2rem;
+}
+
+.rotated {
+  transform: rotate(-8deg);
+}
