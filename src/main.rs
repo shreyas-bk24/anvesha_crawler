@@ -5,7 +5,8 @@ use tracing::{info, warn};
 use crawler::search::query::SearchQuery;
 use crawler::storage::database::{Database, DatabaseConfig};
 use crawler::storage::repository::PageRepository;
-use crawler::algorithms::{LinkGraph, PageRankCalculator};
+use crawler::algorithms::{LinkGraph, PageRankCalculator, TfIdfCalculator};
+use crawler::storage::models::PageFilter;
 use crate::Commands::CalculatePageRank;
 
 #[derive(Parser)]
@@ -79,6 +80,14 @@ enum Commands {
         #[arg(long, default_value = "10")]
         top: usize,
     },
+
+    CalculateTfIdf{
+
+        // show up n terms for each document
+        #[arg(long, default_value = "10")]
+        top : Option<usize>,
+    },
+
     Api {
         #[arg(short, long, default_value = "3000")]
         port: u16,
@@ -201,6 +210,39 @@ async fn main() -> crawler::Result<()> {
             println!("\nPageRank calculation complete!");
         }
 
+        Some(Commands::CalculateTfIdf { top }) => {
+            use crawler::algorithms::TfIdfCalculator;
+            use crawler::storage::{database::Database, repository::PageRepository};
+
+            let db_config = DatabaseConfig::default();
+            let pool = Database::connect(&db_config).await?;
+            let repository = PageRepository::new(pool);
+
+            let pages = repository.get_pages(&PageFilter::new()).await?;
+            println!("📊 Loaded {} documents", pages.len());
+
+            // Build corpus: (doc_id=url_hash preferred for stability, content)
+            let corpus: Vec<(String, String)> = pages.iter()
+                .map(|p| (p.url_hash.clone(), p.content.clone()))
+                .collect();
+
+            let mut tfidf = TfIdfCalculator::new();
+            tfidf.build_from_corpus(&corpus);
+
+            // For each doc, compute a single “magnitude” score to store
+            // Magnitude = sqrt(sum over terms of (tfidf(term, doc))^2)
+            for p in &pages {
+                let doc_id = &p.url_hash;
+                let top_terms = tfidf.get_top_terms(doc_id, top.unwrap_or(256)); // sample top N
+                let magnitude = top_terms.iter().map(|(_, s)| s * s).sum::<f64>().sqrt();
+
+                repository.update_tfidf_score(doc_id, magnitude).await?;
+                println!("{} tfidf_score={:.6}", p.url, magnitude);
+            }
+
+            println!("TF-IDF scores updated");
+        }
+
 
 
         Some(Commands::Search { query, index_path, limit, domain, offset, min_quality, max_quality, sort, snippets, highlight }) => {
@@ -246,7 +288,7 @@ async fn main() -> crawler::Result<()> {
             println!("Found {} results : \n", results.len());
 
             for (i, result) in results.iter().enumerate() {
-                println!(" {}. {} (score : {:.3}, pagerank:  {:.6})", i+1, result.url, result.score, result.pagerank);
+                println!(" {}. {} (score : {:.3}, pagerank:  {:.6}, tfidf: {:.6})", i+1, result.url, result.score, result.pagerank, result.tfidf);
                 if let Some(ref title) = result.title {
                     println!("Title: {}", title);
                 }

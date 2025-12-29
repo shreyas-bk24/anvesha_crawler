@@ -59,6 +59,7 @@ pub enum SortBy{
     Relevance,
     Quality,
     PageRank,
+    TfIdf,
     Date
 }
 
@@ -75,6 +76,7 @@ impl std::str::FromStr for SortBy{
             "relevance" => Ok(SortBy::Relevance),
             "quality" => Ok(SortBy::Quality),
             "pagerank" | "rank" => Ok(SortBy::PageRank),
+            "tfidf" | "idf" => Ok(SortBy::TfIdf),
             "date" => Ok(SortBy::Date),
             _=> Err(format!("Invalid sort option: {}", s)),
         }

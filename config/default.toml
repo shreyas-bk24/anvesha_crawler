@@ -34,3 +34,9 @@ enable_opic = false
 priority_boost_domains = [
     "wikipedia.org", "github.com"
 ]
+
+[ranking]
+relevance_weight = 0.60
+pagerank_weight  = 0.25
+tfidf_weight     = 0.15
+

@@ -490,6 +490,7 @@ dependencies = [
  "dashmap",
  "encoding_rs",
  "hex",
+ "lazy_static",
  "log",
  "mockito",
  "moka",
