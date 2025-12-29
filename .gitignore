@@ -26,6 +26,7 @@ config/secrets.toml
 /data/
 *.db
 *.sqlite
+search_index/
 
 # Testing
 /test_results/
